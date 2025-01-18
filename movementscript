@@ -1,0 +1,145 @@
+using UnityEngine;
+
+public class MovementScript : MonoBehaviour
+{
+    public float speed = 10.0f; // Horizontal movement speed
+    public float jumpForce = 10.0f; // Force applied for jumping
+    public float maxJumpHoldTime = 0.5f; // Maximum time the jump can be held
+    public float jumpHoldForce = 5.0f; // Additional force applied while holding jump
+
+    private Rigidbody2D rb;
+    private bool isGrounded;
+    private bool isJumping;
+    private float jumpTime; // Time spent holding the jump button
+
+    public Transform groundCheck;
+    public float groundCheckRadius = 0.1f;
+    public LayerMask groundLayer;
+
+    public float wallSlideSpeed = 2.0f; // Speed at which the player slides down walls
+    public Transform wallCheck;
+    public float wallCheckRadius = 0.1f;
+    public LayerMask wallLayer;
+
+    private bool facingRight = true; // Track the direction the player is facing
+    private bool isTouchingWall;
+
+    private Animator animator; // Reference to the Animator component
+    private bool isMoving = false; // Boolean to track if the player is moving
+
+    private Collider2D playerCollider; // Reference to the player's collider
+
+    void Start()
+    {
+        // Get the Rigidbody2D component attached to this object
+        rb = GetComponent<Rigidbody2D>();
+
+        // Prevent the Rigidbody2D from rotating
+        rb.freezeRotation = true;
+
+        // Get the Animator component from the "Visuals" child object
+        animator = transform.Find("Visuals").GetComponent<Animator>();
+
+        // Get any Collider2D component attached to this object
+        playerCollider = GetComponent<Collider2D>();
+        if (playerCollider == null)
+        {
+            Debug.LogError("No Collider2D attached to the player object.");
+        }
+    }
+
+    void Update()
+    {
+        if (playerCollider == null) return; // Prevent execution if no collider is attached
+
+        // Get horizontal input (-1 for left, 1 for right)
+        float horizontalInput = Input.GetAxis("Horizontal");
+
+        // Check if the player is touching a wall
+        isTouchingWall = Physics2D.OverlapCircle(wallCheck.position, wallCheckRadius, wallLayer);
+
+        // Prevent sticking to walls
+        if (isTouchingWall && !isGrounded)
+        {
+            if ((horizontalInput > 0 && facingRight) || (horizontalInput < 0 && !facingRight))
+            {
+                horizontalInput = 0; // Disable horizontal movement against the wall
+            }
+
+            // Handle wall sliding
+            if (rb.linearVelocity.y <= 0)
+            {
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, -wallSlideSpeed);
+            }
+        }
+
+        // Calculate the new velocity for horizontal movement
+        rb.linearVelocity = new Vector2(horizontalInput * speed, rb.linearVelocity.y);
+
+        // Check if the player is moving
+        isMoving = Mathf.Abs(horizontalInput) > 0;
+        animator.SetBool("isMoving", isMoving);
+
+        // Flip the sprite based on the movement direction
+        if (horizontalInput > 0 && !facingRight)
+        {
+            Flip();
+        }
+        else if (horizontalInput < 0 && facingRight)
+        {
+            Flip();
+        }
+
+        // Check if the player is on the ground
+        isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+
+        // Handle jumping
+        if ((Input.GetButtonDown("Jump") || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow)) && isGrounded)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            isJumping = true;
+            jumpTime = 0;
+        }
+
+        // Handle jump hold for higher jumps
+        if ((Input.GetButton("Jump") || Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) && isJumping)
+        {
+            jumpTime += Time.deltaTime;
+            if (jumpTime <= maxJumpHoldTime)
+            {
+                rb.AddForce(new Vector2(0, jumpHoldForce), ForceMode2D.Force);
+            }
+        }
+
+        // Stop jump when the button is released
+        if (Input.GetButtonUp("Jump") || Input.GetKeyUp(KeyCode.W) || Input.GetKeyUp(KeyCode.UpArrow))
+        {
+            isJumping = false;
+        }
+    }
+
+    private void OnDrawGizmos()
+    {
+        // Draw a visual representation of the ground check radius in the editor
+        if (groundCheck != null)
+        {
+            Gizmos.color = Color.red;
+            Gizmos.DrawWireSphere(groundCheck.position, groundCheckRadius);
+        }
+
+        // Draw a visual representation of the wall check radius in the editor
+        if (wallCheck != null)
+        {
+            Gizmos.color = Color.blue;
+            Gizmos.DrawWireSphere(wallCheck.position, wallCheckRadius);
+        }
+    }
+
+    private void Flip()
+    {
+        facingRight = !facingRight;
+        Vector3 theScale = transform.localScale;
+        theScale.x *= -1;
+        transform.localScale = theScale;
+    }
+}
